@@ -1,9 +1,15 @@
+// ================================
+// 🎯 Tebak Kartu Berhadiah (v2)
+// Posisi kartu "menang" ditentukan oleh detik lokal user
+// Animasi flip + cooldown + reset ulang
+// ================================
+
 const board = document.getElementById("board");
 const flipsLeftEl = document.getElementById("flips-left");
 const cooldownEl = document.getElementById("cooldown");
 const resetBtn = document.getElementById("resetBtn");
 
-const REDIRECT_LINK = "https://t.me/+ZL5WOTuQwBFiNWRl"; // 🔗 Ganti link hadiahmu
+const REDIRECT_LINK = "https://t.me/+ZL5WOTuQwBFiNWRl"; // ganti sesuai link hadiahmu
 const MAX_FLIPS = 3;
 const COOLDOWN_TIME = 30; // detik
 const TOTAL_CARDS = 9;
@@ -12,44 +18,26 @@ let flipsLeft = MAX_FLIPS;
 let flipped = new Set();
 let winIndex = null;
 let locked = false;
-let localSeed = null;
 
-// 🔹 Seed unik dari kombinasi data lokal (tanpa API)
-function fingerprintSeedLocal() {
-  const ua = navigator.userAgent;
-  const scr = `${screen.width}x${screen.height}`;
-  const lang = navigator.language;
-  const tzOffsetMs = new Date().getTimezoneOffset() * 60 * 1000;
-  const raw = `${ua}|${scr}|${lang}|${tzOffsetMs}`;
-  return btoa(raw).slice(0, 24);
+// ================================
+// 🔹 Posisi kartu menang berdasarkan detik lokal
+// ================================
+function getWinIndexFromSeconds() {
+  const now = new Date();
+  const sec = now.getSeconds();
+  const mapped = sec % 10;
+  // detik 1→pos1, 2→pos2, ..., 9→pos9, 0→pos9
+  return mapped === 0 ? 8 : mapped - 1;
 }
 
-// 🔹 Random generator berbasis seed
-function seededRandom(seed) {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) & 0xffffffff;
-  return () => {
-    h ^= h << 13; h ^= h >>> 17; h ^= h << 5;
-    return (h >>> 0) / 4294967296;
-  };
-}
-
-// 🔹 Shuffle array berdasarkan seed unik
-function shuffle(arr, seed) {
-  const rand = seededRandom(seed);
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-// 🔹 Membuat papan kartu
-function createBoard(seed) {
-  const indices = shuffle([...Array(TOTAL_CARDS).keys()], seed);
-  winIndex = indices[0];
-
+// ================================
+// 🔹 Membuat papan kartu (3x3)
+// ================================
+function createBoard() {
   board.innerHTML = "";
+  winIndex = getWinIndexFromSeconds();
+  console.log("🎯 Posisi kartu menang:", winIndex + 1);
+
   for (let i = 0; i < TOTAL_CARDS; i++) {
     const card = document.createElement("div");
     card.classList.add("card");
@@ -70,7 +58,9 @@ function createBoard(seed) {
   }
 }
 
-// 🔹 Saat kartu diklik
+// ================================
+// 🔹 Ketika kartu diklik
+// ================================
 function flipCard(e) {
   if (locked) return;
   const card = e.target.closest(".card");
@@ -85,6 +75,7 @@ function flipCard(e) {
   flipsLeft--;
   flipsLeftEl.textContent = flipsLeft;
 
+  // Menang
   if (idx === winIndex) {
     setTimeout(() => {
       alert("🎉 Selamat! Kamu menemukan kartu yang benar!");
@@ -93,10 +84,13 @@ function flipCard(e) {
     return;
   }
 
+  // Jika sudah 3x salah
   if (flipsLeft === 0) startCooldown();
 }
 
-// 🔹 Cooldown setelah 3x gagal
+// ================================
+// 🔹 Cooldown 30 detik
+// ================================
 function startCooldown() {
   const until = Date.now() + COOLDOWN_TIME * 1000;
   localStorage.setItem("cooldown_until", until);
@@ -104,13 +98,15 @@ function startCooldown() {
   tickCooldown();
 }
 
-// 🔹 Timer cooldown
+// ================================
+// 🔹 Timer Cooldown
+// ================================
 function tickCooldown() {
   const until = +localStorage.getItem("cooldown_until");
   const now = Date.now();
   if (now < until) {
     const s = Math.ceil((until - now) / 1000);
-    cooldownEl.textContent = `Cooldown: ${s}s`;
+    cooldownEl.textContent = `⏳ Cooldown: ${s}s`;
     requestAnimationFrame(tickCooldown);
   } else {
     localStorage.removeItem("cooldown_until");
@@ -119,25 +115,28 @@ function tickCooldown() {
     flipped.clear();
     flipsLeftEl.textContent = flipsLeft;
     locked = false;
-    createBoard(localSeed);
+    createBoard();
   }
 }
 
-// 🔹 Tombol reset
+// ================================
+// 🔹 Tombol reset (ulangi dari awal)
+// ================================
 function resetGame() {
   flipped.clear();
   flipsLeft = MAX_FLIPS;
   flipsLeftEl.textContent = flipsLeft;
   locked = false;
-  createBoard(localSeed);
+  createBoard();
 }
 
-// 🔹 Inisialisasi game
+// ================================
+// 🔹 Inisialisasi
+// ================================
 resetBtn.addEventListener("click", resetGame);
 board.addEventListener("click", flipCard);
 
 (() => {
-  localSeed = fingerprintSeedLocal();
-  createBoard(localSeed);
+  createBoard();
   tickCooldown();
 })();
